@@ -1,0 +1,49 @@
+name: Importar projeto original uma vez
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/importar-projeto.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  importar:
+    if: github.repository == 'DnSiii/test-card-intelligence'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout do repositorio de destino
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Importar arquivos e historico da pasta test-card
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f index.html ]; then
+            echo "A importacao ja foi concluida. Nenhuma alteracao necessaria."
+            exit 0
+          fi
+          src="$RUNNER_TEMP/portfolio-source"
+          git clone --quiet --single-branch --branch main https://github.com/DnSiii/portfol-io.git "$src"
+          git -C "$src" config user.name "github-actions[bot]"
+          git -C "$src" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          source_commit="$(git -C "$src" subtree split --prefix=test-card HEAD)"
+          test -n "$source_commit"
+          git -C "$src" cat-file -e "$source_commit^{commit}"
+          git -C "$src" ls-tree --name-only "$source_commit" | grep -qx 'index.html'
+          git remote add project-import "$src"
+          git fetch --quiet --no-tags project-import "$source_commit"
+          git merge -s ours --no-commit --allow-unrelated-histories FETCH_HEAD
+          git read-tree --reset -u FETCH_HEAD
+          git commit -m "Import Test Card Intelligence with original project history"
+          git push origin HEAD:main
+          echo "Importacao concluida; arquivos e historico filtrado preservados."
